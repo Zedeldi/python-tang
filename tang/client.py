@@ -19,11 +19,11 @@ class Client(BasePeer):
         """Recover key using ephemeral key for blinding."""
         public = server.advertise()
         ephemeral = self.generate()
-        x = KeyHelper.add(self.key, ephemeral)
+        x = KeyHelper.add(self.key.public_key(), ephemeral)
         y = server.exchange(x)
         z = KeyHelper.multiply(private=ephemeral, public=public)
         return KeyHelper.add(y, KeyHelper.invert(z))
 
     def escrow(self, server: Server) -> ECC.EccKey:
         """Recover key without blinding."""
-        return server.exchange(self.key)
+        return server.exchange(self.key.public_key())

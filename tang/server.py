@@ -14,5 +14,5 @@ class Server(BasePeer):
         return self.key.public_key()
 
     def exchange(self, public: ECC.EccKey) -> ECC.EccKey:
-        """Exchange server private key with ephemeral public key."""
+        """Exchange server private key with specified public key."""
         return KeyHelper.multiply(private=self.key, public=public)
