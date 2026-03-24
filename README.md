@@ -39,7 +39,9 @@ Hello, world
 
 ## Usage
 
-Start server: `fastapi run tang`
+Start server: `fastapi run tang` / `uvicorn tang:app`
+
+Run demonstration of key exchange: `python -m tang`
 
 Run tests: `python -m pytest`
 
