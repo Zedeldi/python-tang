@@ -9,10 +9,10 @@ class BasePeer:
     def __init__(self, key: ECC.EccKey | str = "NIST P-521") -> None:
         """Initialise instance with keys."""
         if isinstance(key, str):
-            self.key = self.generate(key)
+            self.key = self.generate(curve=key)
         else:
             self.key = key
 
-    def generate(self, curve: str | None = None) -> ECC.EccKey:
+    def generate(self, *, curve: str | None = None) -> ECC.EccKey:
         """Generate key for current configuration."""
         return ECC.generate(curve=curve or self.key.curve)

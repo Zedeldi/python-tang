@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from Crypto.PublicKey import ECC
 from jose import jws
 
 from tang.constants import KeyOperations
@@ -19,6 +20,29 @@ class Tang:
     def __init__(self, path: Path | os.PathLike) -> None:
         """Initialise Tang server instance."""
         self.path = Path(path).absolute()
+        self.validate()
+
+    def validate(self) -> None:
+        """Validate required keys exist else generate new keys."""
+        for operations in (
+            [KeyOperations.DERIVE_KEY],
+            [KeyOperations.SIGN, KeyOperations.VERIFY],
+        ):
+            if not self.get_keys_by_operation(operations[0]):
+                self.generate(operations=operations)
+
+    def generate(
+        self, *, operations: list[KeyOperations], curve: str = "NIST P-521"
+    ) -> TangKey:
+        """Generate a key with the specified key operations."""
+        key = KeyHelper.to_jwk(ECC.generate(curve=curve)).to_dict()
+        key.update({"key_ops": operations})
+        if KeyOperations.DERIVE_KEY in operations:
+            key.update({"alg": "ECMR"})
+        thumbprint = KeyHelper.get_thumbprint(key)
+        with open(self.path / f"{thumbprint}.jwk", "w") as file:
+            file.write(json.dumps(key))
+        return key
 
     @property
     def keys(self) -> list[TangKey]:
@@ -29,9 +53,15 @@ class Tang:
                 keys.append(TangKey(path=key, **json.load(file)))
         return keys
 
-    def get_keys_by_operation(self, operation: KeyOperations) -> list[TangKey]:
+    def get_keys_by_operation(
+        self, operation: KeyOperations, include_rotated: bool = False
+    ) -> list[TangKey]:
         """Return list of TangKey instances with specified key_ops."""
-        return [key for key in self.keys if operation in key.key_ops]
+        return [
+            key
+            for key in self.keys
+            if operation in key.key_ops and (not key.rotated or include_rotated)
+        ]
 
     def get_key_by_thumbprint(self, thumbprint: str) -> TangKey | None:
         """Return TangKey instance with specified thumbprint or None."""
