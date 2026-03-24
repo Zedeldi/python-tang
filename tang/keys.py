@@ -1,16 +1,27 @@
 """Provide helper methods to handle cryptographic keys."""
 
+import json
 import math
 from types import ModuleType
 from typing import Literal
 
+from Crypto.Hash import SHA256
 from Crypto.Protocol.KDF import HKDF
 from Crypto.PublicKey import ECC
 from Crypto.PublicKey._curve import _Curve as Curve
+from jose import jwk
+from jose.utils import base64_to_long, base64url_encode
 
 
 def _u32be(value: int) -> bytes:
     return value.to_bytes(length=4, byteorder="big")
+
+
+CURVES_TO_JWK = {
+    "NIST P-521": jwk.ALGORITHMS.ES512,
+    "NIST P-384": jwk.ALGORITHMS.ES384,
+    "NIST P-256": jwk.ALGORITHMS.ES256,
+}
 
 
 class KeyHelper:
@@ -27,6 +38,49 @@ class KeyHelper:
         return ECC.EccKey(curve=point.curve, point=point)
 
     @classmethod
+    def from_jwk(cls: type[KeyHelper], jwk: dict[str, str]) -> ECC.EccKey:
+        """Return EccKey instance from JWK as dictionary."""
+        if d := jwk.get("d"):
+            return cls.from_private(curve=jwk["crv"], d=base64_to_long(d))
+        return cls.from_point(
+            ECC.EccPoint(
+                curve=jwk["crv"], x=base64_to_long(jwk["x"]), y=base64_to_long(jwk["y"])
+            )
+        )
+
+    @classmethod
+    def get_thumbprint(
+        cls: type[KeyHelper],
+        key: ECC.EccKey | dict[str, str],
+        hashmod: ModuleType = SHA256,
+    ) -> str:
+        """Return base64-encoded thumbprint of key using specified hashmod."""
+        key = {
+            k: v
+            for k, v in (
+                cls.to_jwk(key).to_dict() if isinstance(key, ECC.EccKey) else key
+            ).items()
+            if k in ("crv", "kty", "x", "y")
+        }
+        return base64url_encode(
+            hashmod.new(
+                json.dumps(key, sort_keys=True, separators=(",", ":")).encode("ascii")
+            ).digest()
+        ).decode()
+
+    @staticmethod
+    def to_bytes(key: ECC.EccKey, byteorder: Literal["big", "little"] = "big") -> bytes:
+        """Return bytes from point x."""
+        point = key.pointQ
+        return int(point.x).to_bytes(length=point.size_in_bytes(), byteorder=byteorder)
+
+    @classmethod
+    def to_jwk(cls: type[KeyHelper], key: ECC.EccKey) -> jwk.Key:
+        """Return EccKey as JWK."""
+        algorithm = CURVES_TO_JWK.get(cls.get_curve(key.curve).canonical)
+        return jwk.construct(key.export_key(format="PEM"), algorithm=algorithm)
+
+    @classmethod
     def multiply(
         cls: type[KeyHelper], *, private: ECC.EccKey, public: ECC.EccKey
     ) -> ECC.EccKey:
@@ -37,12 +91,6 @@ class KeyHelper:
     def add(cls: type[KeyHelper], a: ECC.EccKey, b: ECC.EccKey) -> ECC.EccKey:
         """Add two key points together."""
         return cls.from_point(a.pointQ + b.pointQ)
-
-    @staticmethod
-    def to_bytes(key: ECC.EccKey, byteorder: Literal["big", "little"] = "big") -> bytes:
-        """Return bytes from point x."""
-        point = key.pointQ
-        return int(point.x).to_bytes(length=point.size_in_bytes(), byteorder=byteorder)
 
     @staticmethod
     def get_curve(curve: str) -> Curve:
