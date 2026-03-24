@@ -2,8 +2,8 @@
 
 from Crypto.PublicKey import ECC
 
-from tang.base import BasePeer
 from tang.keys import KeyHelper
+from tang.peers.base import BasePeer
 
 
 class Server(BasePeer):

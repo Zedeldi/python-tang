@@ -2,8 +2,7 @@
 
 from Crypto.PublicKey import ECC
 
-from tang.client import Client
-from tang.server import Server
+from tang.peers import Client, Server
 
 
 def test_provision(client: Client, server: Server):

@@ -1,63 +1,16 @@
-"""Implement Tang protocol and API."""
+"""Implement Tang protocol backend."""
 
 import json
 import os
-from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
 from jose import jws
-from pydantic import BaseModel
 
+from tang.constants import KeyOperations
 from tang.keys import KeyHelper
-from tang.server import Server
-
-
-class JwsModel(BaseModel):
-    """Pydantic model for JWS."""
-
-    payload: str
-    protected: str
-    signature: str
-
-
-class JwkModel(BaseModel):
-    """Pydantic model for JWK."""
-
-    alg: str
-    crv: str
-    kty: str
-    x: str
-    y: str
-
-
-class TangKey(JwkModel):
-    """Model to store key information."""
-
-    d: str
-    key_ops: list[str]
-    path: Path
-
-    @property
-    def rotated(self) -> bool:
-        """Return whether key has been rotated."""
-        return self.path.name.startswith(".")
-
-    def public_key(self) -> dict[str, str]:
-        """Return dictionary of public key from self."""
-        key = self.dict(exclude={"d", "path"})
-        if KeyOps.SIGN in (key_ops := key["key_ops"]):
-            key_ops.remove(KeyOps.SIGN)
-        return key
-
-
-class KeyOps(StrEnum):
-    """Enumeration of key operations."""
-
-    DERIVE_KEY = "deriveKey"
-    SIGN = "sign"
-    VERIFY = "verify"
+from tang.models import JwkModel, JwsModel, TangKey
+from tang.peers import Server
 
 
 class Tang:
@@ -76,20 +29,20 @@ class Tang:
                 keys.append(TangKey(path=key, **json.load(file)))
         return keys
 
-    def get_keys_for_use(self, use: str) -> list[TangKey]:
-        """Return TangKey instances with specified use."""
-        return [key for key in self.keys if use in key.key_ops]
+    def get_keys_by_operation(self, operation: KeyOperations) -> list[TangKey]:
+        """Return TangKey instances with specified key_ops."""
+        return [key for key in self.keys if operation in key.key_ops]
 
     def get_key_by_thumbprint(self, thumbprint: str) -> TangKey | None:
         """Return TangKey instance by thumbprint or None."""
-        keys = self.filter_keys_by_thumbprint(self.keys, thumbprint)
+        keys = self._filter_keys_by_thumbprint(self.keys, thumbprint)
         try:
             return keys[0]
         except IndexError:
             return None
 
     @staticmethod
-    def filter_keys_by_thumbprint(
+    def _filter_keys_by_thumbprint(
         keys: list[TangKey], thumbprint: str
     ) -> list[TangKey]:
         """Return list of TangKey instances filtered by thumbprint."""
@@ -99,7 +52,7 @@ class Tang:
 
     def sign(self, data: str | dict[str, Any]) -> JwsModel:
         """Sign data and return JwsModel."""
-        signing_key = self.get_keys_for_use(KeyOps.SIGN)[0]
+        signing_key = self.get_keys_by_operation(KeyOperations.SIGN)[0]
         signed = jws.sign(
             data,
             KeyHelper.to_jwk(KeyHelper.from_jwk(signing_key.dict())),
@@ -110,12 +63,12 @@ class Tang:
 
     def advertise(self, thumbprint: str | None = None) -> JwsModel | None:
         """Advertise available public keys."""
-        keys = self.get_keys_for_use(KeyOps.DERIVE_KEY)
+        keys = self.get_keys_by_operation(KeyOperations.DERIVE_KEY)
         if thumbprint is not None:
-            keys = self.filter_keys_by_thumbprint(keys, thumbprint)
+            keys = self._filter_keys_by_thumbprint(keys, thumbprint)
         if not keys:
             return None
-        keys += self.get_keys_for_use(KeyOps.VERIFY)
+        keys += self.get_keys_by_operation(KeyOperations.VERIFY)
         return self.sign(
             {"keys": [key.public_key() for key in keys if not key.rotated]}
         )
@@ -130,26 +83,3 @@ class Tang:
         result = KeyHelper.to_jwk(exchange).to_dict()
         result.update({"alg": "ECMR"})
         return JwkModel(**result)
-
-
-app = FastAPI()
-tang = Tang(Path("keys"))
-
-
-@app.get("/adv/")
-@app.get("/adv/{thumbprint}")
-def advertise(thumbprint: str | None = None) -> JwsModel:
-    """Advertise available public keys as JWS, optionally filtered by thumbprint."""
-    keys = tang.advertise(thumbprint)
-    if not keys:
-        raise HTTPException(status_code=404, detail="Thumbprint not found")
-    return keys
-
-
-@app.post("/rec/{thumbprint}")
-def recover(thumbprint: str, key: JwkModel) -> JwkModel:
-    """Recover shared key by exchanging key with private key matching thumbprint."""
-    result = tang.recover(thumbprint, key)
-    if not result:
-        raise HTTPException(status_code=404, detail="Thumbprint not found")
-    return result

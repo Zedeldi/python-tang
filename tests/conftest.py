@@ -2,8 +2,7 @@
 
 import pytest
 
-from tang.client import Client
-from tang.server import Server
+from tang.peers import Client, Server
 
 
 @pytest.fixture

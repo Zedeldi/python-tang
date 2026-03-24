@@ -4,9 +4,8 @@ from pprint import pprint
 
 from Crypto.Hash import SHA256
 
-from tang.client import Client
 from tang.keys import KeyHelper
-from tang.server import Server
+from tang.peers import Client, Server
 
 
 def main():

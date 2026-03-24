@@ -1,8 +1,8 @@
 """Python implementation of the Tang protocol."""
 
-from tang.client import Client
+from tang.app import app
 from tang.keys import KeyHelper
-from tang.server import Server
-from tang.tang import Tang, app
+from tang.peers import Client, Server
+from tang.services import Tang
 
 __all__ = ["app", "Client", "KeyHelper", "Server", "Tang"]
