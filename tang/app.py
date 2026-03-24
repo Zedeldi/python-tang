@@ -1,14 +1,13 @@
 """FastAPI app to provide HTTP REST API for Tang protocol."""
 
-from pathlib import Path
-
 from fastapi import FastAPI, HTTPException
 
+from tang.config import JWK_PATH
 from tang.models import JwkModel, JwsModel, JwsMultiModel
 from tang.services import Tang
 
 app = FastAPI()
-tang = Tang(Path("keys"))
+tang = Tang(path=JWK_PATH)
 
 
 @app.get("/adv/")

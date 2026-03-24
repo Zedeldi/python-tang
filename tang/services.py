@@ -24,6 +24,8 @@ class Tang:
 
     def validate(self) -> None:
         """Validate required keys exist else generate new keys."""
+        if not self.path.exists():
+            self.path.mkdir(parents=True)
         for operations in (
             [KeyOperations.DERIVE_KEY],
             [KeyOperations.SIGN, KeyOperations.VERIFY],
