@@ -58,7 +58,7 @@ class TangKey(JwkModel):
 
     def public_key(self) -> dict[str, str]:
         """Return dictionary of public key from self."""
-        key = self.dict(exclude={"d", "path"})
+        key = self.model_dump(exclude={"d", "path"})
         if KeyOperations.SIGN in (key_ops := key["key_ops"]):
             key_ops.remove(KeyOperations.SIGN)
         return key

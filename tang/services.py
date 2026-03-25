@@ -68,7 +68,7 @@ class Tang:
     def get_key_by_thumbprint(self, thumbprint: str) -> TangKey | None:
         """Return TangKey instance with specified thumbprint or None."""
         for key in self.keys:
-            if KeyHelper.get_thumbprint(key.dict()) == thumbprint:
+            if KeyHelper.get_thumbprint(key.model_dump()) == thumbprint:
                 return key
         return None
 
@@ -81,13 +81,13 @@ class Tang:
         for key in keys:
             protected, payload, signature = jws.sign(
                 data,
-                KeyHelper.to_jwk(KeyHelper.from_jwk(key.dict())),
+                KeyHelper.to_jwk(KeyHelper.from_jwk(key.model_dump())),
                 algorithm="ES512",
             ).split(".")
             signatures.append(JwsSignature(protected=protected, signature=signature))
         if len(signatures) > 1:
             return JwsMultiModel(payload=payload, signatures=signatures)
-        return JwsModel(payload=payload, **signatures[0].dict())
+        return JwsModel(payload=payload, **signatures[0].model_dump())
 
     def sign(
         self, data: str | dict[str, Any], thumbprint: str | None = None
@@ -118,8 +118,8 @@ class Tang:
         key = self.get_key_by_thumbprint(thumbprint)
         if not key:
             return None
-        server = Server(KeyHelper.from_jwk(key.dict()))
-        exchange = server.exchange(KeyHelper.from_jwk(peer.dict()))
+        server = Server(KeyHelper.from_jwk(key.model_dump()))
+        exchange = server.exchange(KeyHelper.from_jwk(peer.model_dump()))
         result = KeyHelper.to_jwk(exchange).to_dict()
         result.update({"alg": "ECMR"})
         return JwkModel(**result)
